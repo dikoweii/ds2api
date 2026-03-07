@@ -106,6 +106,14 @@ flowchart LR
 可通过配置中的 `claude_mapping` 或 `claude_model_mapping` 覆盖映射关系。
 另外，`/anthropic/v1/models` 现已包含 Claude 1.x/2.x/3.x/4.x 历史模型 ID 与常见别名，便于旧客户端直接兼容。
 
+
+#### Claude Code 接入避坑（实测）
+
+- `ANTHROPIC_BASE_URL` 推荐直接指向 DS2API 根地址（例如 `http://127.0.0.1:5001`），Claude Code 会请求 `/v1/messages?beta=true`。
+- `ANTHROPIC_API_KEY` 需要与 `config.json` 中 `keys` 一致；建议同时保留常规 key 与 `sk-ant-*` 形态 key，兼容不同客户端校验习惯。
+- 若系统设置了代理，建议对 DS2API 地址配置 `NO_PROXY=127.0.0.1,localhost,<你的主机IP>`，避免本地回环请求被代理拦截。
+- 如遇“工具调用输出成文本、未执行”问题，请升级到包含 Claude 工具调用多格式解析（JSON/XML/ANTML/invoke）的版本。
+
 ### Gemini 接口
 
 Gemini 适配器将模型名通过 `model_aliases` 或内置规则映射到 DeepSeek 原生模型，支持 `generateContent` 和 `streamGenerateContent` 两种调用方式，并完整支持 Tool Calling（`functionDeclarations` → `functionCall` 输出）。

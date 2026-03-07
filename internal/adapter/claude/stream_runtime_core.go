@@ -8,6 +8,7 @@ import (
 
 	"ds2api/internal/sse"
 	streamengine "ds2api/internal/stream"
+	"ds2api/internal/util"
 )
 
 type claudeStreamRuntime struct {
@@ -116,6 +117,15 @@ func (s *claudeStreamRuntime) onParsed(parsed sse.LineResult) streamengine.Parse
 
 		s.text.WriteString(p.Text)
 		if s.bufferToolContent {
+			detected := util.ParseToolCalls(s.text.String(), s.toolNames)
+			if len(detected) > 0 {
+				s.finalize("tool_use")
+				return streamengine.ParsedDecision{
+					ContentSeen: true,
+					Stop:        true,
+					StopReason:  streamengine.StopReason("tool_use_detected"),
+				}
+			}
 			continue
 		}
 		s.closeThinkingBlock()

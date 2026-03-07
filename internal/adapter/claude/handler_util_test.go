@@ -125,8 +125,11 @@ func TestBuildClaudeToolPromptSingleTool(t *testing.T) {
 	if !containsStr(prompt, "Search the web") {
 		t.Fatalf("expected description in prompt")
 	}
-	if !containsStr(prompt, "tool_calls") {
-		t.Fatalf("expected tool_calls instruction in prompt")
+	if !containsStr(prompt, "tool_use") {
+		t.Fatalf("expected tool_use instruction in prompt")
+	}
+	if containsStr(prompt, "tool_calls") {
+		t.Fatalf("expected prompt to avoid tool_calls JSON instruction")
 	}
 }
 
