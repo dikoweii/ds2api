@@ -202,20 +202,28 @@ function consumeToolCapture(state, toolNames) {
     return { ready: false, prefix: '', calls: [], suffix: '' };
   }
   const lower = captured.toLowerCase();
-  const keyIdx = lower.indexOf('tool_calls');
+  
+  let keyIdx = -1;
+  const keywords = ['tool_calls', 'function.name:', '[tool_call_history]'];
+  for (const kw of keywords) {
+    const idx = lower.indexOf(kw);
+    if (idx >= 0 && (keyIdx < 0 || idx < keyIdx)) {
+      keyIdx = idx;
+    }
+  }
+  
   if (keyIdx < 0) {
     return { ready: false, prefix: '', calls: [], suffix: '' };
   }
   const start = captured.slice(0, keyIdx).lastIndexOf('{');
-  if (start < 0) {
-    return { ready: false, prefix: '', calls: [], suffix: '' };
-  }
-  const obj = extractJSONObjectFrom(captured, start);
+  const actualStart = start >= 0 ? start : keyIdx;
+  
+  const obj = extractJSONObjectFrom(captured, actualStart);
   if (!obj.ok) {
     return { ready: false, prefix: '', calls: [], suffix: '' };
   }
 
-  const prefixPart = captured.slice(0, start);
+  const prefixPart = captured.slice(0, actualStart);
   const suffixPart = captured.slice(obj.end);
 
   if (insideCodeFence((state.recentTextTail || '') + prefixPart)) {
@@ -227,16 +235,7 @@ function consumeToolCapture(state, toolNames) {
     };
   }
 
-  if ((state.recentTextTail || '').trim() !== '' || prefixPart.trim() !== '' || suffixPart.trim() !== '') {
-    return {
-      ready: true,
-      prefix: captured,
-      calls: [],
-      suffix: '',
-    };
-  }
-
-  const parsed = parseStandaloneToolCallsDetailed(captured.slice(start, obj.end), toolNames);
+  const parsed = parseStandaloneToolCallsDetailed(captured.slice(actualStart, obj.end), toolNames);
   if (!Array.isArray(parsed.calls) || parsed.calls.length === 0) {
     if (parsed.sawToolCallSyntax && parsed.rejectedByPolicy) {
       return {

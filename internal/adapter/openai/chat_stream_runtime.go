@@ -98,11 +98,11 @@ func (s *chatStreamRuntime) sendDone() {
 func (s *chatStreamRuntime) finalize(finishReason string) {
 	finalThinking := s.thinking.String()
 	finalText := s.text.String()
-	detected := util.ParseStandaloneToolCalls(finalText, s.toolNames)
-	if len(detected) > 0 && !s.toolCallsDoneEmitted {
+	detected := util.ParseStandaloneToolCallsDetailed(finalText, s.toolNames)
+	if len(detected.Calls) > 0 && !s.toolCallsDoneEmitted {
 		finishReason = "tool_calls"
 		delta := map[string]any{
-			"tool_calls": formatFinalStreamToolCallsWithStableIDs(detected, s.streamToolCallIDs),
+			"tool_calls": formatFinalStreamToolCallsWithStableIDs(detected.Calls, s.streamToolCallIDs),
 		}
 		if !s.firstChunkSent {
 			delta["role"] = "assistant"
@@ -158,7 +158,7 @@ func (s *chatStreamRuntime) finalize(finishReason string) {
 		}
 	}
 
-	if len(detected) > 0 || s.toolCallsEmitted {
+	if len(detected.Calls) > 0 || s.toolCallsEmitted {
 		finishReason = "tool_calls"
 	}
 	s.sendChunk(openaifmt.BuildChatStreamChunk(

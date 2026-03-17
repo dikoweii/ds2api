@@ -206,13 +206,22 @@ func consumeToolCapture(state *toolStreamSieveState, toolNames []string) (prefix
 		return "", nil, "", false
 	}
 	lower := strings.ToLower(captured)
-	keyIdx := strings.Index(lower, "tool_calls")
+	
+	keyIdx := -1
+	keywords := []string{"tool_calls", "function.name:", "[tool_call_history]"}
+	for _, kw := range keywords {
+		idx := strings.Index(lower, kw)
+		if idx >= 0 && (keyIdx < 0 || idx < keyIdx) {
+			keyIdx = idx
+		}
+	}
+	
 	if keyIdx < 0 {
 		return "", nil, "", false
 	}
 	start := strings.LastIndex(captured[:keyIdx], "{")
 	if start < 0 {
-		return "", nil, "", false
+		start = keyIdx
 	}
 	obj, end, ok := extractJSONObjectFrom(captured, start)
 	if !ok {
@@ -230,6 +239,9 @@ func consumeToolCapture(state *toolStreamSieveState, toolNames []string) (prefix
 			// consume it to avoid leaking raw tool_calls JSON to user content.
 			return prefixPart, nil, suffixPart, true
 		}
+		// If it has obvious keywords but failed to parse even after loose repair,
+		// we still might want to intercept it if it looks like an attempt at tool call.
+		// For now, keep the original logic but rely on loose JSON repair.
 		return captured, nil, "", true
 	}
 	return prefixPart, parsed.Calls, suffixPart, true

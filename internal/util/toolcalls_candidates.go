@@ -20,7 +20,7 @@ func buildToolCallCandidates(text string) []string {
 		}
 	}
 
-	// best-effort extraction around "tool_calls" key in mixed text payloads.
+	// best-effort extraction around tool call keywords in mixed text payloads.
 	candidates = append(candidates, extractToolCallObjects(trimmed)...)
 
 	// best-effort object slice: from first '{' to last '}'
@@ -57,25 +57,65 @@ func extractToolCallObjects(text string) []string {
 	lower := strings.ToLower(text)
 	out := []string{}
 	offset := 0
+	keywords := []string{"tool_calls", "function.name:", "[tool_call_history]"}
 	for {
-		idx := strings.Index(lower[offset:], "tool_calls")
-		if idx < 0 {
+		bestIdx := -1
+		matchedKeyword := ""
+		for _, kw := range keywords {
+			idx := strings.Index(lower[offset:], kw)
+			if idx >= 0 {
+				absIdx := offset + idx
+				if bestIdx < 0 || absIdx < bestIdx {
+					bestIdx = absIdx
+					matchedKeyword = kw
+				}
+			}
+		}
+
+		if bestIdx < 0 {
 			break
 		}
-		idx += offset
-		start := strings.LastIndex(text[:idx], "{")
-		for start >= 0 {
+
+		idx := bestIdx
+		// Avoid backtracking too far to prevent OOM on malicious or very long strings
+		searchLimit := idx - 2000
+		if searchLimit < offset {
+			searchLimit = offset
+		}
+		
+		start := strings.LastIndex(text[searchLimit:idx], "{")
+		if start >= 0 {
+			start += searchLimit
+		}
+		
+		if start < 0 {
+			offset = idx + len(matchedKeyword)
+			continue
+		}
+
+		foundObj := false
+		for start >= searchLimit {
 			candidate, end, ok := extractJSONObject(text, start)
 			if ok {
 				// Move forward to avoid repeatedly matching the same object.
 				offset = end
 				out = append(out, strings.TrimSpace(candidate))
+				foundObj = true
 				break
 			}
-			start = strings.LastIndex(text[:start], "{")
+			// Try previous '{'
+			if start > searchLimit {
+				prevStart := strings.LastIndex(text[searchLimit:start], "{")
+				if prevStart >= 0 {
+					start = searchLimit + prevStart
+					continue
+				}
+			}
+			break
 		}
-		if start < 0 {
-			offset = idx + len("tool_calls")
+		
+		if !foundObj {
+			offset = idx + len(matchedKeyword)
 		}
 	}
 	return out
@@ -88,7 +128,12 @@ func extractJSONObject(text string, start int) (string, int, bool) {
 	depth := 0
 	quote := byte(0)
 	escaped := false
-	for i := start; i < len(text); i++ {
+	// Limit scan length to avoid OOM on unclosed objects
+	maxLen := start + 50000
+	if maxLen > len(text) {
+		maxLen = len(text)
+	}
+	for i := start; i < maxLen; i++ {
 		ch := text[i]
 		if quote != 0 {
 			if escaped {
