@@ -247,8 +247,18 @@ func (h *Handler) deleteAllSessions(w http.ResponseWriter, r *http.Request) {
 	// 删除所有会话
 	err := h.DS.DeleteAllSessionsForToken(r.Context(), token)
 	if err != nil {
-		writeJSON(w, http.StatusOK, map[string]any{"success": false, "message": "删除失败: " + err.Error()})
-		return
+		// token 可能过期，尝试重新登录并重试一次
+		newToken, loginErr := h.DS.Login(r.Context(), acc)
+		if loginErr != nil {
+			writeJSON(w, http.StatusOK, map[string]any{"success": false, "message": "删除失败: " + err.Error()})
+			return
+		}
+		token = newToken
+		_ = h.Store.UpdateAccountToken(acc.Identifier(), token)
+		if retryErr := h.DS.DeleteAllSessionsForToken(r.Context(), token); retryErr != nil {
+			writeJSON(w, http.StatusOK, map[string]any{"success": false, "message": "删除失败: " + retryErr.Error()})
+			return
+		}
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{"success": true, "message": "删除成功"})

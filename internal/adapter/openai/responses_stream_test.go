@@ -297,7 +297,7 @@ func TestHandleResponsesStreamOutputTextDeltaCarriesItemIndexes(t *testing.T) {
 	}
 }
 
-func TestHandleResponsesStreamThinkingAndMixedToolExampleRemainMessageOnly(t *testing.T) {
+func TestHandleResponsesStreamThinkingAndMixedToolExampleEmitsFunctionCall(t *testing.T) {
 	h := &Handler{}
 	req := httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
 	rec := httptest.NewRecorder()
@@ -333,6 +333,7 @@ func TestHandleResponsesStreamThinkingAndMixedToolExampleRemainMessageOnly(t *te
 	responseObj, _ := completedPayload["response"].(map[string]any)
 	output, _ := responseObj["output"].([]any)
 	hasMessage := false
+	hasFunctionCall := false
 	for _, item := range output {
 		m, _ := item.(map[string]any)
 		if m == nil {
@@ -342,11 +343,14 @@ func TestHandleResponsesStreamThinkingAndMixedToolExampleRemainMessageOnly(t *te
 			hasMessage = true
 		}
 		if asString(m["type"]) == "function_call" {
-			t.Fatalf("did not expect function_call output for mixed prose tool example, output=%#v", output)
+			hasFunctionCall = true
 		}
 	}
 	if !hasMessage {
 		t.Fatalf("expected message output for mixed prose tool example, output=%#v", output)
+	}
+	if !hasFunctionCall {
+		t.Fatalf("expected function_call output for mixed prose tool example, output=%#v", output)
 	}
 }
 

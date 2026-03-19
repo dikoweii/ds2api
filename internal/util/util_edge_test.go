@@ -409,8 +409,8 @@ func TestParseToolCallsWithFunctionWrapper(t *testing.T) {
 func TestParseStandaloneToolCallsFencedCodeBlock(t *testing.T) {
 	fenced := "Here's an example:\n```json\n{\"tool_calls\":[{\"name\":\"search\",\"input\":{\"q\":\"go\"}}]}\n```\nDon't execute this."
 	calls := ParseStandaloneToolCalls(fenced, []string{"search"})
-	if len(calls) != 0 {
-		t.Fatalf("expected fenced code block ignored, got %d calls", len(calls))
+	if len(calls) != 1 {
+		t.Fatalf("expected fenced code block to be parsed, got %d calls", len(calls))
 	}
 }
 

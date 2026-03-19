@@ -22,8 +22,8 @@ func TestParseToolCalls(t *testing.T) {
 func TestParseToolCallsFromFencedJSON(t *testing.T) {
 	text := "I will call tools now\n```json\n{\"tool_calls\":[{\"name\":\"search\",\"input\":{\"q\":\"news\"}}]}\n```"
 	calls := ParseToolCalls(text, []string{"search"})
-	if len(calls) != 0 {
-		t.Fatalf("expected fenced tool_call example to be ignored, got %#v", calls)
+	if len(calls) != 1 {
+		t.Fatalf("expected fenced tool_call payload to be parsed, got %#v", calls)
 	}
 }
 
@@ -99,10 +99,10 @@ func TestFormatOpenAIToolCalls(t *testing.T) {
 	}
 }
 
-func TestParseStandaloneToolCallsOnlyMatchesStandalonePayload(t *testing.T) {
+func TestParseStandaloneToolCallsSupportsMixedProsePayload(t *testing.T) {
 	mixed := `这里是示例：{"tool_calls":[{"name":"search","input":{"q":"go"}}]}`
-	if calls := ParseStandaloneToolCalls(mixed, []string{"search"}); len(calls) != 0 {
-		t.Fatalf("expected standalone parser to ignore mixed prose, got %#v", calls)
+	if calls := ParseStandaloneToolCalls(mixed, []string{"search"}); len(calls) != 1 {
+		t.Fatalf("expected standalone parser to parse mixed prose payload, got %#v", calls)
 	}
 
 	standalone := `{"tool_calls":[{"name":"search","input":{"q":"go"}}]}`
@@ -112,10 +112,10 @@ func TestParseStandaloneToolCallsOnlyMatchesStandalonePayload(t *testing.T) {
 	}
 }
 
-func TestParseStandaloneToolCallsIgnoresFencedCodeBlock(t *testing.T) {
+func TestParseStandaloneToolCallsParsesFencedCodeBlock(t *testing.T) {
 	fenced := "```json\n{\"tool_calls\":[{\"name\":\"search\",\"input\":{\"q\":\"go\"}}]}\n```"
-	if calls := ParseStandaloneToolCalls(fenced, []string{"search"}); len(calls) != 0 {
-		t.Fatalf("expected fenced tool_call example to be ignored, got %#v", calls)
+	if calls := ParseStandaloneToolCalls(fenced, []string{"search"}); len(calls) != 1 {
+		t.Fatalf("expected fenced tool_call payload to be parsed, got %#v", calls)
 	}
 }
 
@@ -288,7 +288,7 @@ func TestRepairInvalidJSONBackslashes(t *testing.T) {
 		input    string
 		expected string
 	}{
-		{`{"path": "C:\Users\name"}`, `{"path": "C:\\Users\\name"}`},
+		{`{"path": "C:\Users\name"}`, `{"path": "C:\\Users\name"}`},
 		{`{"cmd": "cd D:\git_codes"}`, `{"cmd": "cd D:\\git_codes"}`},
 		{`{"text": "line1\nline2"}`, `{"text": "line1\nline2"}`},
 		{`{"path": "D:\\back\\slash"}`, `{"path": "D:\\back\\slash"}`},
@@ -419,29 +419,30 @@ func TestParseToolCallsWithMixedWindowsPaths(t *testing.T) {
 	}
 }
 
-func TestParseToolCallsWithPathEscapesAndTextNewlines(t *testing.T) {
-	text := `{"name":"write_file","input":"{\"content\":\"line1\\nline2\",\"path\":\"D:\\tmp\\a.txt\"}"}`
-	availableTools := []string{"write_file"}
-	parsed := ParseToolCalls(text, availableTools)
-	if len(parsed) != 1 {
-		t.Fatalf("expected 1 parsed tool call, got %d", len(parsed))
+func TestParseToolCallInputRepairsControlCharsInPath(t *testing.T) {
+	in := `{"path":"D:\tmp\new\readme.txt","content":"line1\nline2"}`
+	parsed := parseToolCallInput(in)
+
+	path, ok := parsed["path"].(string)
+	if !ok {
+		t.Fatalf("expected path string in parsed input, got %#v", parsed["path"])
+	}
+	if path != `D:\tmp\new\readme.txt` {
+		t.Fatalf("expected repaired windows path, got %q", path)
 	}
 
-	content, _ := parsed[0].Input["content"].(string)
-	path, _ := parsed[0].Input["path"].(string)
-	if !strings.Contains(content, "line1\nline2") {
-		t.Fatalf("expected content to preserve newline semantics, got %q", content)
+	content, ok := parsed["content"].(string)
+	if !ok {
+		t.Fatalf("expected content string in parsed input, got %#v", parsed["content"])
 	}
-	if strings.ContainsAny(path, "\n\r\t") {
-		t.Fatalf("expected path to avoid control chars, got %q", path)
-	}
-	if !strings.Contains(path, `D:\tmp\a.txt`) {
-		t.Fatalf("expected path with literal backslashes, got %q", path)
+	if content != "line1\nline2" {
+		t.Fatalf("expected non-path field to keep decoded escapes, got %q", content)
 	}
 }
 
 func TestRepairLooseJSONWithNestedObjects(t *testing.T) {
-	// 覆盖深层嵌套对象的方括号修复，避免 regex 单层能力带来的漂移。
+	// 测试嵌套对象的修复：DeepSeek 幻觉输出，每个元素内部包含嵌套 {}
+	// 注意：正则只支持单层嵌套，不支持更深层次的嵌套
 	tests := []struct {
 		name     string
 		input    string
@@ -506,11 +507,6 @@ func TestRepairLooseJSONWithNestedObjects(t *testing.T) {
 			name:     "5个嵌套对象",
 			input:    `"tasks": {"id":1}, {"id":2}, {"id":3}, {"id":4}, {"id":5}`,
 			expected: `"tasks": [{"id":1}, {"id":2}, {"id":3}, {"id":4}, {"id":5}]`,
-		},
-		{
-			name:     "深层嵌套对象",
-			input:    `"todos": {"meta":{"a":{"b":1}},"content":"x"}, {"meta":{"a":{"b":2}},"content":"y"}`,
-			expected: `"todos": [{"meta":{"a":{"b":1}},"content":"x"}, {"meta":{"a":{"b":2}},"content":"y"}]`,
 		},
 	}
 

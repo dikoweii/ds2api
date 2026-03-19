@@ -211,7 +211,7 @@ func TestHandleNonStreamUnknownToolNotIntercepted(t *testing.T) {
 	}
 }
 
-func TestHandleNonStreamEmbeddedToolCallExampleRemainsText(t *testing.T) {
+func TestHandleNonStreamEmbeddedToolCallExamplePromotesToolCall(t *testing.T) {
 	h := &Handler{}
 	resp := makeSSEHTTPResponse(
 		`data: {"p":"response/content","v":"下面是示例："}`,
@@ -229,20 +229,21 @@ func TestHandleNonStreamEmbeddedToolCallExampleRemainsText(t *testing.T) {
 	out := decodeJSONBody(t, rec.Body.String())
 	choices, _ := out["choices"].([]any)
 	choice, _ := choices[0].(map[string]any)
-	if choice["finish_reason"] != "stop" {
-		t.Fatalf("expected finish_reason=stop, got %#v", choice["finish_reason"])
+	if choice["finish_reason"] != "tool_calls" {
+		t.Fatalf("expected finish_reason=tool_calls, got %#v", choice["finish_reason"])
 	}
 	msg, _ := choice["message"].(map[string]any)
-	if _, ok := msg["tool_calls"]; ok {
-		t.Fatalf("did not expect tool_calls field for embedded example: %#v", msg["tool_calls"])
+	toolCalls, _ := msg["tool_calls"].([]any)
+	if len(toolCalls) != 1 {
+		t.Fatalf("expected one tool_call field for embedded example: %#v", msg["tool_calls"])
 	}
 	content, _ := msg["content"].(string)
-	if !strings.Contains(content, "下面是示例：") || !strings.Contains(content, "请勿执行。") || !strings.Contains(content, `"tool_calls"`) {
-		t.Fatalf("expected embedded example to remain plain text, got %#v", content)
+	if strings.Contains(content, `"tool_calls"`) {
+		t.Fatalf("expected raw tool_calls json stripped from content, got %#v", content)
 	}
 }
 
-func TestHandleNonStreamFencedToolCallExampleNotIntercepted(t *testing.T) {
+func TestHandleNonStreamFencedToolCallExamplePromotesToolCall(t *testing.T) {
 	h := &Handler{}
 	resp := makeSSEHTTPResponse(
 		"data: {\"p\":\"response/content\",\"v\":\"```json\\n{\\\"tool_calls\\\":[{\\\"name\\\":\\\"search\\\",\\\"input\\\":{\\\"q\\\":\\\"go\\\"}}]}\\n```\"}",
@@ -258,16 +259,17 @@ func TestHandleNonStreamFencedToolCallExampleNotIntercepted(t *testing.T) {
 	out := decodeJSONBody(t, rec.Body.String())
 	choices, _ := out["choices"].([]any)
 	choice, _ := choices[0].(map[string]any)
-	if choice["finish_reason"] != "stop" {
-		t.Fatalf("expected finish_reason=stop, got %#v", choice["finish_reason"])
+	if choice["finish_reason"] != "tool_calls" {
+		t.Fatalf("expected finish_reason=tool_calls, got %#v", choice["finish_reason"])
 	}
 	msg, _ := choice["message"].(map[string]any)
-	if _, ok := msg["tool_calls"]; ok {
-		t.Fatalf("did not expect tool_calls field for fenced example: %#v", msg["tool_calls"])
+	toolCalls, _ := msg["tool_calls"].([]any)
+	if len(toolCalls) != 1 {
+		t.Fatalf("expected one tool_call field for fenced example: %#v", msg["tool_calls"])
 	}
 	content, _ := msg["content"].(string)
-	if !strings.Contains(content, "```json") || !strings.Contains(content, `"tool_calls"`) {
-		t.Fatalf("expected fenced tool example to pass through as text, got %q", content)
+	if strings.Contains(content, `"tool_calls"`) {
+		t.Fatalf("expected raw tool_calls json stripped from content, got %q", content)
 	}
 }
 
@@ -615,7 +617,7 @@ func TestHandleStreamToolCallWithSameChunkTrailingTextRemainsText(t *testing.T) 
 	}
 }
 
-func TestHandleStreamFencedToolCallSnippetRemainsText(t *testing.T) {
+func TestHandleStreamFencedToolCallSnippetPromotesToolCall(t *testing.T) {
 	h := &Handler{}
 	resp := makeSSEHTTPResponse(
 		fmt.Sprintf(`data: {"p":"response/content","v":%q}`, "下面是调用示例：\n```json\n"),
@@ -631,8 +633,8 @@ func TestHandleStreamFencedToolCallSnippetRemainsText(t *testing.T) {
 	if !done {
 		t.Fatalf("expected [DONE], body=%s", rec.Body.String())
 	}
-	if streamHasToolCallsDelta(frames) {
-		t.Fatalf("did not expect tool_calls delta for fenced snippet, body=%s", rec.Body.String())
+	if !streamHasToolCallsDelta(frames) {
+		t.Fatalf("expected tool_calls delta for fenced snippet, body=%s", rec.Body.String())
 	}
 	content := strings.Builder{}
 	for _, frame := range frames {
@@ -646,11 +648,11 @@ func TestHandleStreamFencedToolCallSnippetRemainsText(t *testing.T) {
 		}
 	}
 	got := content.String()
-	if !strings.Contains(got, "```json") || !strings.Contains(strings.ToLower(got), "tool_calls") {
-		t.Fatalf("expected fenced tool snippet in content, got=%q", got)
+	if strings.Contains(strings.ToLower(got), "tool_calls") {
+		t.Fatalf("expected raw fenced tool_calls snippet stripped from content, got=%q", got)
 	}
-	if streamFinishReason(frames) != "stop" {
-		t.Fatalf("expected finish_reason=stop, body=%s", rec.Body.String())
+	if streamFinishReason(frames) != "tool_calls" {
+		t.Fatalf("expected finish_reason=tool_calls, body=%s", rec.Body.String())
 	}
 }
 

@@ -49,18 +49,17 @@ func (c *Client) DeleteSession(ctx context.Context, a *auth.RequestAuth, session
 			continue
 		}
 
-		code := intFrom(resp["code"])
-		if status == http.StatusOK && code == 0 {
+		code, bizCode, msg, bizMsg := extractResponseStatus(resp)
+		if status == http.StatusOK && code == 0 && bizCode == 0 {
 			result.Success = true
 			return result, nil
 		}
 
-		msg, _ := resp["msg"].(string)
 		result.ErrorMessage = fmt.Sprintf("status=%d, code=%d, msg=%s", status, code, msg)
-		config.Logger.Warn("[delete_session] failed", "status", status, "code", code, "msg", msg, "session_id", sessionID)
+		config.Logger.Warn("[delete_session] failed", "status", status, "code", code, "biz_code", bizCode, "msg", msg, "biz_msg", bizMsg, "session_id", sessionID)
 
 		if a.UseConfigToken {
-			if isTokenInvalid(status, code, msg) && !refreshed {
+			if isTokenInvalid(status, code, bizCode, msg, bizMsg) && !refreshed {
 				if c.Auth.RefreshToken(ctx, a) {
 					refreshed = true
 					continue

@@ -45,7 +45,7 @@ func TestBuildResponseObjectToolCallsFollowChatShape(t *testing.T) {
 	}
 }
 
-func TestBuildResponseObjectTreatsMixedProseToolPayloadAsText(t *testing.T) {
+func TestBuildResponseObjectPromotesMixedProseToolPayloadToFunctionCall(t *testing.T) {
 	obj := BuildResponseObject(
 		"resp_test",
 		"gpt-4o",
@@ -56,20 +56,20 @@ func TestBuildResponseObjectTreatsMixedProseToolPayloadAsText(t *testing.T) {
 	)
 
 	outputText, _ := obj["output_text"].(string)
-	if outputText == "" {
-		t.Fatalf("expected output_text preserved for mixed prose payload")
+	if outputText != "" {
+		t.Fatalf("expected output_text hidden for mixed prose tool payload, got %q", outputText)
 	}
 	output, _ := obj["output"].([]any)
 	if len(output) != 1 {
-		t.Fatalf("expected one message output item, got %#v", obj["output"])
+		t.Fatalf("expected one function_call output item, got %#v", obj["output"])
 	}
 	first, _ := output[0].(map[string]any)
-	if first["type"] != "message" {
-		t.Fatalf("expected message output type, got %#v", first["type"])
+	if first["type"] != "function_call" {
+		t.Fatalf("expected function_call output type, got %#v", first["type"])
 	}
 }
 
-func TestBuildResponseObjectFencedToolPayloadRemainsText(t *testing.T) {
+func TestBuildResponseObjectPromotesFencedToolPayloadToFunctionCall(t *testing.T) {
 	obj := BuildResponseObject(
 		"resp_test",
 		"gpt-4o",
@@ -80,16 +80,16 @@ func TestBuildResponseObjectFencedToolPayloadRemainsText(t *testing.T) {
 	)
 
 	outputText, _ := obj["output_text"].(string)
-	if outputText == "" {
-		t.Fatalf("expected output_text preserved for fenced example")
+	if outputText != "" {
+		t.Fatalf("expected output_text hidden for fenced tool payload, got %q", outputText)
 	}
 	output, _ := obj["output"].([]any)
 	if len(output) != 1 {
-		t.Fatalf("expected one message output item, got %#v", obj["output"])
+		t.Fatalf("expected one function_call output item, got %#v", obj["output"])
 	}
 	first, _ := output[0].(map[string]any)
-	if first["type"] != "message" {
-		t.Fatalf("expected message output type, got %#v", first["type"])
+	if first["type"] != "function_call" {
+		t.Fatalf("expected function_call output type, got %#v", first["type"])
 	}
 }
 

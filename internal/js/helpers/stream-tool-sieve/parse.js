@@ -2,10 +2,8 @@
 
 const {
   toStringSafe,
-  looksLikeToolExampleContext,
 } = require('./state');
 const {
-  stripFencedCodeBlocks,
   buildToolCallCandidates,
   parseToolCallsPayload,
   parseMarkupToolCalls,
@@ -38,16 +36,13 @@ function parseToolCalls(text, toolNames) {
 
 function parseToolCallsDetailed(text, toolNames) {
   const result = emptyParseResult();
-  if (!toStringSafe(text)) {
+  const normalized = toStringSafe(text);
+  if (!normalized) {
     return result;
   }
-  const sanitized = stripFencedCodeBlocks(text);
-  if (!toStringSafe(sanitized)) {
-    return result;
-  }
-  result.sawToolCallSyntax = looksLikeToolCallSyntax(sanitized);
+  result.sawToolCallSyntax = looksLikeToolCallSyntax(normalized);
 
-  const candidates = buildToolCallCandidates(sanitized);
+  const candidates = buildToolCallCandidates(normalized);
   let parsed = [];
   for (const c of candidates) {
     parsed = parseToolCallsPayload(c);
@@ -63,9 +58,9 @@ function parseToolCallsDetailed(text, toolNames) {
     }
   }
   if (parsed.length === 0) {
-    parsed = parseMarkupToolCalls(sanitized);
+    parsed = parseMarkupToolCalls(normalized);
     if (parsed.length === 0) {
-      parsed = parseTextKVToolCalls(sanitized);
+      parsed = parseTextKVToolCalls(normalized);
       if (parsed.length === 0) {
         return result;
       }
@@ -90,22 +85,29 @@ function parseStandaloneToolCallsDetailed(text, toolNames) {
   if (!trimmed) {
     return result;
   }
-  if (trimmed.includes('```')) {
-    return result;
-  }
-  if (looksLikeToolExampleContext(trimmed)) {
-    return result;
-  }
   result.sawToolCallSyntax = looksLikeToolCallSyntax(trimmed);
-  let parsed = parseToolCallsPayload(trimmed);
+  const candidates = buildToolCallCandidates(trimmed);
+  let parsed = [];
+  for (const c of candidates) {
+    parsed = parseToolCallsPayload(c);
+    if (parsed.length === 0) {
+      parsed = parseMarkupToolCalls(c);
+    }
+    if (parsed.length === 0) {
+      parsed = parseTextKVToolCalls(c);
+    }
+    if (parsed.length > 0) {
+      break;
+    }
+  }
   if (parsed.length === 0) {
     parsed = parseMarkupToolCalls(trimmed);
-  }
-  if (parsed.length === 0) {
-    parsed = parseTextKVToolCalls(trimmed);
-  }
-  if (parsed.length === 0) {
-    return result;
+    if (parsed.length === 0) {
+      parsed = parseTextKVToolCalls(trimmed);
+      if (parsed.length === 0) {
+        return result;
+      }
+    }
   }
 
   result.sawToolCallSyntax = true;

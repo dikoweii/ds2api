@@ -46,6 +46,9 @@ function processToolSieveChunk(state, chunk, toolNames) {
       if (Array.isArray(consumed.calls) && consumed.calls.length > 0) {
         state.pendingToolRaw = captured;
         state.pendingToolCalls = consumed.calls;
+        if (consumed.suffix) {
+          state.pending = consumed.suffix + state.pending;
+        }
         continue;
       }
       if (consumed.prefix) {

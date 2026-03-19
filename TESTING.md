@@ -200,13 +200,6 @@ go test -v -run 'TestParseToolCalls|TestRepair' ./internal/util/
 # 2. 查看测试输出中的详细调试信息
 go test -v -run TestParseToolCallsWithDeepSeekHallucination ./internal/util/ 2>&1
 
-# 2.1 strict 模式（Go/JS）语义对齐检查：混合 prose + tool JSON 仍可拦截
-node --test tests/node/stream-tool-sieve.test.js
-
-# 2.2 Windows 路径与文本换行语义回归
-go test -v -run TestParseToolCallsWithInvalidBackslashes ./internal/util/
-go test -v -run TestParseToolCallsWithPathEscapesAndTextNewlines ./internal/util/
-
 # 3. 检查具体测试用例的修复效果
 # 测试用例位于 internal/util/toolcalls_test.go，包含：
 # - TestParseToolCallsWithDeepSeekHallucination: DeepSeek 典型幻觉输出

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 
 	"ds2api/internal/auth"
 	"ds2api/internal/config"
@@ -22,12 +23,12 @@ type SessionInfo struct {
 
 // SessionStats 会话统计结果
 type SessionStats struct {
-	AccountID      string  // 账号标识 (email 或 mobile)
-	FirstPageCount int     // 第一页会话数量（当 HasMore 为 true 时，真实总数可能更大）
-	PinnedCount    int     // 置顶会话数量
-	HasMore        bool    // 是否还有更多页
-	Success        bool    // 请求是否成功
-	ErrorMessage   string  // 错误信息
+	AccountID      string // 账号标识 (email 或 mobile)
+	FirstPageCount int    // 第一页会话数量（当 HasMore 为 true 时，真实总数可能更大）
+	PinnedCount    int    // 置顶会话数量
+	HasMore        bool   // 是否还有更多页
+	Success        bool   // 请求是否成功
+	ErrorMessage   string // 错误信息
 }
 
 // GetSessionCount 获取单个账号的会话数量
@@ -56,8 +57,8 @@ func (c *Client) GetSessionCount(ctx context.Context, a *auth.RequestAuth, maxAt
 			continue
 		}
 
-		code := intFrom(resp["code"])
-		if status == http.StatusOK && code == 0 {
+		code, bizCode, msg, bizMsg := extractResponseStatus(resp)
+		if status == http.StatusOK && code == 0 && bizCode == 0 {
 			data, _ := resp["data"].(map[string]any)
 			bizData, _ := data["biz_data"].(map[string]any)
 			chatSessions, _ := bizData["chat_sessions"].([]any)
@@ -79,12 +80,11 @@ func (c *Client) GetSessionCount(ctx context.Context, a *auth.RequestAuth, maxAt
 			return stats, nil
 		}
 
-		msg, _ := resp["msg"].(string)
 		stats.ErrorMessage = fmt.Sprintf("status=%d, code=%d, msg=%s", status, code, msg)
-		config.Logger.Warn("[get_session_count] failed", "status", status, "code", code, "msg", msg, "account", a.AccountID)
+		config.Logger.Warn("[get_session_count] failed", "status", status, "code", code, "biz_code", bizCode, "msg", msg, "biz_msg", bizMsg, "account", a.AccountID)
 
 		if a.UseConfigToken {
-			if isTokenInvalid(status, code, msg) && !refreshed {
+			if isTokenInvalid(status, code, bizCode, msg, bizMsg) && !refreshed {
 				if c.Auth.RefreshToken(ctx, a) {
 					refreshed = true
 					continue
@@ -114,9 +114,11 @@ func (c *Client) GetSessionCountForToken(ctx context.Context, token string) (*Se
 		return nil, err
 	}
 
-	code := intFrom(resp["code"])
-	if status != http.StatusOK || code != 0 {
-		msg, _ := resp["msg"].(string)
+	code, bizCode, msg, bizMsg := extractResponseStatus(resp)
+	if status != http.StatusOK || code != 0 || bizCode != 0 {
+		if strings.TrimSpace(bizMsg) != "" {
+			msg = bizMsg
+		}
 		return nil, fmt.Errorf("request failed: status=%d, code=%d, msg=%s", status, code, msg)
 	}
 

@@ -1,9 +1,12 @@
 package admin
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -13,10 +16,13 @@ import (
 )
 
 type testingDSMock struct {
-	loginCalls          int
-	createSessionCalls  int
-	getPowCalls         int
-	callCompletionCalls int
+	loginCalls                 int
+	createSessionCalls         int
+	getPowCalls                int
+	callCompletionCalls        int
+	deleteAllSessionsCalls     int
+	deleteAllSessionsError     error
+	deleteAllSessionsErrorOnce bool
 }
 
 func (m *testingDSMock) Login(_ context.Context, _ config.Account) (string, error) {
@@ -40,6 +46,14 @@ func (m *testingDSMock) CallCompletion(_ context.Context, _ *auth.RequestAuth, _
 }
 
 func (m *testingDSMock) DeleteAllSessionsForToken(_ context.Context, _ string) error {
+	m.deleteAllSessionsCalls++
+	if m.deleteAllSessionsError != nil {
+		err := m.deleteAllSessionsError
+		if m.deleteAllSessionsErrorOnce {
+			m.deleteAllSessionsError = nil
+		}
+		return err
+	}
 	return nil
 }
 
@@ -81,5 +95,40 @@ func TestTestAccount_BatchModeOnlyCreatesSession(t *testing.T) {
 	}
 	if updated.TestStatus != "ok" {
 		t.Fatalf("expected test status ok, got %q", updated.TestStatus)
+	}
+}
+
+func TestDeleteAllSessions_RetryWithReloginOnDeleteFailure(t *testing.T) {
+	t.Setenv("DS2API_CONFIG_JSON", `{"accounts":[{"email":"batch@example.com","password":"pwd","token":"expired-token"}]}`)
+	store := config.LoadStore()
+	ds := &testingDSMock{deleteAllSessionsError: errors.New("token expired"), deleteAllSessionsErrorOnce: true}
+	h := &Handler{Store: store, DS: ds}
+
+	req := httptest.NewRequest(http.MethodPost, "/delete-all", bytes.NewBufferString(`{"identifier":"batch@example.com"}`))
+	rec := httptest.NewRecorder()
+	h.deleteAllSessions(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+	var resp map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal response: %v", err)
+	}
+	if ok, _ := resp["success"].(bool); !ok {
+		t.Fatalf("expected success response, got %#v", resp)
+	}
+	if ds.loginCalls != 1 {
+		t.Fatalf("expected relogin once, got %d", ds.loginCalls)
+	}
+	if ds.deleteAllSessionsCalls != 2 {
+		t.Fatalf("expected delete called twice, got %d", ds.deleteAllSessionsCalls)
+	}
+	updated, ok := store.FindAccount("batch@example.com")
+	if !ok {
+		t.Fatal("expected account")
+	}
+	if updated.Token != "new-token" {
+		t.Fatalf("expected refreshed token persisted, got %q", updated.Token)
 	}
 }
