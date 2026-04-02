@@ -166,8 +166,9 @@ Default URL: `http://localhost:5001`
 ### Option 2: Docker
 
 ```bash
-# 1. Prepare env file
+# 1. Prepare env file and config file
 cp .env.example .env
+cp config.example.json config.json
 
 # 2. Edit .env (at least set DS2API_ADMIN_KEY)
 #    DS2API_ADMIN_KEY=replace-with-a-strong-secret

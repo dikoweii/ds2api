@@ -225,6 +225,47 @@ func TestNormalizeClaudeMessagesToolResultNonTextPayloadStringified(t *testing.T
 	}
 }
 
+func TestNormalizeClaudeMessagesBackfillsToolResultCallIDByName(t *testing.T) {
+	msgs := []any{
+		map[string]any{
+			"role": "assistant",
+			"content": []any{
+				map[string]any{
+					"type":  "tool_use",
+					"name":  "search_web",
+					"input": map[string]any{"query": "latest"},
+				},
+			},
+		},
+		map[string]any{
+			"role": "user",
+			"content": []any{
+				map[string]any{
+					"type":    "tool_result",
+					"name":    "search_web",
+					"content": "ok",
+				},
+			},
+		},
+	}
+
+	got := normalizeClaudeMessages(msgs)
+	if len(got) != 2 {
+		t.Fatalf("expected 2 messages, got %#v", got)
+	}
+	assistant, _ := got[0].(map[string]any)
+	tc, _ := assistant["tool_calls"].([]any)
+	call, _ := tc[0].(map[string]any)
+	callID, _ := call["id"].(string)
+	if !strings.HasPrefix(callID, "call_claude_") {
+		t.Fatalf("expected generated call id, got %#v", call)
+	}
+	toolMsg, _ := got[1].(map[string]any)
+	if toolMsg["tool_call_id"] != callID {
+		t.Fatalf("expected tool_result to reuse generated id, got %#v", toolMsg)
+	}
+}
+
 // ─── buildClaudeToolPrompt ───────────────────────────────────────────
 
 func TestBuildClaudeToolPromptSingleTool(t *testing.T) {

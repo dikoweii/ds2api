@@ -70,23 +70,51 @@ func (r *Resolver) Determine(req *http.Request) (*RequestAuth, error) {
 		}, nil
 	}
 	target := strings.TrimSpace(req.Header.Get("X-Ds2-Target-Account"))
-	acc, ok := r.Pool.AcquireWait(ctx, target, nil)
-	if !ok {
-		return nil, ErrNoAccount
-	}
-	a := &RequestAuth{
-		UseConfigToken: true,
-		CallerID:       callerID,
-		AccountID:      acc.Identifier(),
-		Account:        acc,
-		TriedAccounts:  map[string]bool{},
-		resolver:       r,
-	}
-	if err := r.ensureManagedToken(ctx, a); err != nil {
-		r.Pool.Release(a.AccountID)
+	a, err := r.acquireManagedRequestAuth(ctx, callerID, target)
+	if err != nil {
 		return nil, err
 	}
 	return a, nil
+}
+
+func (r *Resolver) acquireManagedRequestAuth(ctx context.Context, callerID, target string) (*RequestAuth, error) {
+	tried := map[string]bool{}
+	var lastEnsureErr error
+	for {
+		if target == "" && len(tried) >= len(r.Store.Accounts()) {
+			if lastEnsureErr != nil {
+				return nil, lastEnsureErr
+			}
+			return nil, ErrNoAccount
+		}
+		acc, ok := r.Pool.AcquireWait(ctx, target, tried)
+		if !ok {
+			if lastEnsureErr != nil {
+				return nil, lastEnsureErr
+			}
+			return nil, ErrNoAccount
+		}
+
+		a := &RequestAuth{
+			UseConfigToken: true,
+			CallerID:       callerID,
+			AccountID:      acc.Identifier(),
+			Account:        acc,
+			TriedAccounts:  tried,
+			resolver:       r,
+		}
+
+		if err := r.ensureManagedToken(ctx, a); err != nil {
+			lastEnsureErr = err
+			tried[a.AccountID] = true
+			r.Pool.Release(a.AccountID)
+			if target != "" {
+				return nil, err
+			}
+			continue
+		}
+		return a, nil
+	}
 }
 
 // DetermineCaller resolves caller identity without acquiring any pooled account.
@@ -164,16 +192,20 @@ func (r *Resolver) SwitchAccount(ctx context.Context, a *RequestAuth) bool {
 		a.TriedAccounts[a.AccountID] = true
 		r.Pool.Release(a.AccountID)
 	}
-	acc, ok := r.Pool.Acquire("", a.TriedAccounts)
-	if !ok {
-		return false
+	for {
+		acc, ok := r.Pool.Acquire("", a.TriedAccounts)
+		if !ok {
+			return false
+		}
+		a.Account = acc
+		a.AccountID = acc.Identifier()
+		if err := r.ensureManagedToken(ctx, a); err != nil {
+			a.TriedAccounts[a.AccountID] = true
+			r.Pool.Release(a.AccountID)
+			continue
+		}
+		return true
 	}
-	a.Account = acc
-	a.AccountID = acc.Identifier()
-	if err := r.ensureManagedToken(ctx, a); err != nil {
-		return false
-	}
-	return true
 }
 
 func (r *Resolver) Release(a *RequestAuth) {

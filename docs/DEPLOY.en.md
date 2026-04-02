@@ -111,8 +111,9 @@ go build -o ds2api ./cmd/ds2api
 ### 2.1 Basic Steps
 
 ```bash
-# Copy env template
+# Copy env template and config file
 cp .env.example .env
+cp config.example.json config.json
 
 # Edit .env and set at least:
 #   DS2API_ADMIN_KEY=your-admin-key

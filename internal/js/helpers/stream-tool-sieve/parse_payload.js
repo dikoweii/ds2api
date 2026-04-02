@@ -85,6 +85,8 @@ function extractToolCallObjects(text) {
   while (true) {
     const idxToolCalls = lower.indexOf('tool_calls', offset);
     const idxFunction = lower.indexOf('"function"', offset);
+    const idxFunctionCall = lower.indexOf('functioncall', offset);
+    const idxToolUse = lower.indexOf('"tool_use"', offset);
     let idx = -1;
     let matched = '';
     if (idxToolCalls >= 0 && (idxFunction < 0 || idxToolCalls <= idxFunction)) {
@@ -93,6 +95,14 @@ function extractToolCallObjects(text) {
     } else if (idxFunction >= 0) {
       idx = idxFunction;
       matched = '"function"';
+    }
+    if (idxFunctionCall >= 0 && (idx < 0 || idxFunctionCall < idx)) {
+      idx = idxFunctionCall;
+      matched = 'functioncall';
+    }
+    if (idxToolUse >= 0 && (idx < 0 || idxToolUse < idx)) {
+      idx = idxToolUse;
+      matched = '"tool_use"';
     }
     if (idx < 0) {
       break;
@@ -327,6 +337,20 @@ function parseToolCallItem(m) {
   let name = toStringSafe(m.name);
   let inputRaw = m.input;
   let hasInput = Object.prototype.hasOwnProperty.call(m, 'input');
+  const fnCall = m.functionCall && typeof m.functionCall === 'object' ? m.functionCall : null;
+  if (fnCall) {
+    if (!name) {
+      name = toStringSafe(fnCall.name);
+    }
+    if (!hasInput && Object.prototype.hasOwnProperty.call(fnCall, 'args')) {
+      inputRaw = fnCall.args;
+      hasInput = true;
+    }
+    if (!hasInput && Object.prototype.hasOwnProperty.call(fnCall, 'arguments')) {
+      inputRaw = fnCall.arguments;
+      hasInput = true;
+    }
+  }
   const fn = m.function && typeof m.function === 'object' ? m.function : null;
 
   if (fn) {

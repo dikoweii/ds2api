@@ -105,6 +105,7 @@
         "apiKeysDesc": "管理 API 访问密钥池",
         "addKey": "添加密钥",
         "copied": "已复制",
+        "copyFailed": "复制失败",
         "copyKeyTitle": "复制密钥",
         "deleteKeyTitle": "删除密钥",
         "noApiKeys": "未找到 API 密钥",

@@ -204,6 +204,45 @@ func TestSwitchAccountNilTriedAccounts(t *testing.T) {
 	r.Release(a)
 }
 
+func TestSwitchAccountSkipsLoginFailureAndContinues(t *testing.T) {
+	t.Setenv("DS2API_CONFIG_JSON", `{
+		"keys":["managed-key"],
+		"accounts":[
+			{"email":"acc1@test.com","password":"pwd","token":"t1"},
+			{"email":"acc2@test.com","password":"pwd"},
+			{"email":"acc3@test.com","password":"pwd","token":"t3"}
+		]
+	}`)
+	store := config.LoadStore()
+	pool := account.NewPool(store)
+	r := NewResolver(store, pool, func(_ context.Context, acc config.Account) (string, error) {
+		if acc.Email == "acc2@test.com" {
+			return "", errors.New("login failed")
+		}
+		return "new-token", nil
+	})
+
+	req, _ := http.NewRequest("POST", "/", nil)
+	req.Header.Set("Authorization", "Bearer managed-key")
+	a, err := r.Determine(req)
+	if err != nil {
+		t.Fatalf("determine failed: %v", err)
+	}
+	defer r.Release(a)
+	if a.AccountID != "acc1@test.com" {
+		t.Fatalf("expected first account, got %q", a.AccountID)
+	}
+	if !r.SwitchAccount(context.Background(), a) {
+		t.Fatal("expected switch to succeed after skipping failed account")
+	}
+	if a.AccountID != "acc3@test.com" {
+		t.Fatalf("expected fallback to third account, got %q", a.AccountID)
+	}
+	if !a.TriedAccounts["acc2@test.com"] {
+		t.Fatalf("expected failed account to be marked as tried")
+	}
+}
+
 // ─── Release edge cases ─────────────────────────────────────────────
 
 func TestReleaseNilAuth(t *testing.T) {

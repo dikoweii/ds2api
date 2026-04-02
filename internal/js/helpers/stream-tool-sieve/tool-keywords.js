@@ -4,6 +4,8 @@ const TOOL_SEGMENT_KEYWORDS = [
   'tool_calls',
   '"function"',
   'function.name:',
+  'functioncall',
+  '"tool_use"',
 ];
 
 const XML_TOOL_SEGMENT_TAGS = [

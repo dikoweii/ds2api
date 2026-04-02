@@ -237,7 +237,10 @@ function isLikelyJSONToolPayloadCandidate(text) {
     return false;
   }
   const lower = trimmed.toLowerCase();
-  return lower.includes('tool_calls') || lower.includes('"function"');
+  return lower.includes('tool_calls')
+    || lower.includes('"function"')
+    || lower.includes('functioncall')
+    || lower.includes('"tool_use"');
 }
 
 module.exports = {

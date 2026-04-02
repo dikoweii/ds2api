@@ -105,6 +105,7 @@
         "apiKeysDesc": "Manage the API access key pool",
         "addKey": "Add key",
         "copied": "Copied",
+        "copyFailed": "Copy failed",
         "copyKeyTitle": "Copy key",
         "deleteKeyTitle": "Delete key",
         "noApiKeys": "No API keys found.",

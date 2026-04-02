@@ -1,5 +1,30 @@
+import { useState } from 'react'
 import { Check, ChevronDown, Copy, Plus, Trash2 } from 'lucide-react'
 import clsx from 'clsx'
+
+function fallbackCopyText(text) {
+    const textArea = document.createElement('textarea')
+    textArea.value = text
+    textArea.setAttribute('readonly', '')
+    textArea.style.position = 'fixed'
+    textArea.style.top = '-9999px'
+    textArea.style.left = '-9999px'
+
+    document.body.appendChild(textArea)
+    textArea.focus()
+    textArea.select()
+
+    let copied = false
+    try {
+        copied = document.execCommand('copy')
+    } finally {
+        document.body.removeChild(textArea)
+    }
+
+    if (!copied) {
+        throw new Error('copy failed')
+    }
+}
 
 export default function ApiKeysPanel({
     t,
@@ -11,6 +36,31 @@ export default function ApiKeysPanel({
     setCopiedKey,
     onDeleteKey,
 }) {
+    const [failedKey, setFailedKey] = useState(null)
+
+    const handleCopyKey = async (key) => {
+        try {
+            if (navigator.clipboard?.writeText) {
+                await navigator.clipboard.writeText(key)
+            } else {
+                fallbackCopyText(key)
+            }
+            setCopiedKey(key)
+            setFailedKey(null)
+            setTimeout(() => setCopiedKey(null), 2000)
+        } catch {
+            try {
+                fallbackCopyText(key)
+                setCopiedKey(key)
+                setFailedKey(null)
+                setTimeout(() => setCopiedKey(null), 2000)
+            } catch {
+                setFailedKey(key)
+                setTimeout(() => setFailedKey(null), 2500)
+            }
+        }
+    }
+
     return (
         <div className="bg-card border border-border rounded-xl overflow-hidden shadow-sm">
             <div
@@ -42,28 +92,31 @@ export default function ApiKeysPanel({
                         config.keys.map((key, i) => (
                             <div key={i} className="p-4 flex items-center justify-between hover:bg-muted/50 transition-colors group">
                                 <div className="flex items-center gap-2">
-                                    <div className="font-mono text-sm bg-muted/50 px-3 py-1 rounded inline-block">
+                                    <button
+                                        onClick={() => handleCopyKey(key)}
+                                        className="font-mono text-sm bg-muted/50 px-3 py-1 rounded inline-block hover:bg-muted transition-colors"
+                                        title={t('accountManager.copyKeyTitle')}
+                                    >
                                         {key.slice(0, 16)}****
-                                    </div>
+                                    </button>
                                     {copiedKey === key && (
                                         <span className="text-xs text-green-500 animate-pulse">{t('accountManager.copied')}</span>
+                                    )}
+                                    {failedKey === key && (
+                                        <span className="text-xs text-destructive">{t('accountManager.copyFailed')}</span>
                                     )}
                                 </div>
                                 <div className="flex items-center gap-1">
                                     <button
-                                        onClick={() => {
-                                            navigator.clipboard.writeText(key)
-                                            setCopiedKey(key)
-                                            setTimeout(() => setCopiedKey(null), 2000)
-                                        }}
-                                        className="p-2 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-md transition-colors opacity-0 group-hover:opacity-100"
+                                        onClick={() => handleCopyKey(key)}
+                                        className="p-2 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-md transition-colors"
                                         title={t('accountManager.copyKeyTitle')}
                                     >
                                         {copiedKey === key ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
                                     </button>
                                     <button
                                         onClick={() => onDeleteKey(key)}
-                                        className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-md transition-colors opacity-0 group-hover:opacity-100"
+                                        className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-md transition-colors"
                                         title={t('accountManager.deleteKeyTitle')}
                                     >
                                         <Trash2 className="w-4 h-4" />

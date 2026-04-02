@@ -104,6 +104,7 @@ func TestFindToolSegmentStartDetectsXMLToolCalls(t *testing.T) {
 		want  int
 	}{
 		{"tool_calls_tag", "some text <tool_calls>\n", 10},
+		{"gemini_function_call_json", `some text {"functionCall":{"name":"search","args":{"q":"latest"}}}`, 10},
 		{"tool_call_tag", "prefix <tool_call>\n", 7},
 		{"invoke_tag", "text <invoke name=\"foo\">body</invoke>", 5},
 		{"function_call_tag", "<function_call name=\"foo\">body</function_call>", 0},
@@ -116,6 +117,81 @@ func TestFindToolSegmentStartDetectsXMLToolCalls(t *testing.T) {
 				t.Fatalf("findToolSegmentStart(%q) = %d, want %d", tc.input, got, tc.want)
 			}
 		})
+	}
+}
+
+func TestFindToolSegmentStartIgnoresFunctionCallProse(t *testing.T) {
+	input := "Please explain the functionCall API field and how clients should parse it."
+	if got := findToolSegmentStart(input); got != -1 {
+		t.Fatalf("expected no tool segment start for prose, got %d", got)
+	}
+}
+
+func TestFindToolSegmentStartDetectsQuotedFunctionCallKey(t *testing.T) {
+	input := `prefix {"functionCall": {"name":"search_web","args":{"query":"x"}}}`
+	want := strings.Index(input, "{")
+	if got := findToolSegmentStart(input); got != want {
+		t.Fatalf("expected JSON object start %d, got %d", want, got)
+	}
+}
+
+func TestFindToolSegmentStartDetectsLooseFunctionCallKey(t *testing.T) {
+	input := `prefix {functionCall: {"name":"search_web","args":{"query":"x"}}}`
+	want := strings.Index(input, "{")
+	if got := findToolSegmentStart(input); got != want {
+		t.Fatalf("expected JSON object start %d, got %d", want, got)
+	}
+}
+
+func TestFindToolSegmentStartPrefersQuotedFunctionCallOverEarlierBareProse(t *testing.T) {
+	input := `prefix {note} functionCall: docs hint {"functionCall":{"name":"search_web","args":{"query":"x"}}}`
+	want := strings.Index(input, `{"functionCall"`)
+	if got := findToolSegmentStart(input); got != want {
+		t.Fatalf("expected quoted functionCall JSON start %d, got %d", want, got)
+	}
+}
+
+func TestFindToolSegmentStartIgnoresLooseFunctionCallProse(t *testing.T) {
+	input := "Please explain why functionCall: is used in documentation examples."
+	if got := findToolSegmentStart(input); got != -1 {
+		t.Fatalf("expected no tool segment start for prose, got %d", got)
+	}
+}
+
+func TestProcessToolSieveDoesNotBufferFunctionCallProse(t *testing.T) {
+	var state toolStreamSieveState
+	chunk := "Please explain the functionCall API field and keep streaming this sentence."
+	events := processToolSieveChunk(&state, chunk, []string{"search_web"})
+	var text string
+	for _, evt := range events {
+		text += evt.Content
+		if len(evt.ToolCalls) > 0 {
+			t.Fatalf("expected no tool calls for prose, got %#v", evt.ToolCalls)
+		}
+	}
+	if text != chunk {
+		t.Fatalf("expected prose to pass through immediately, got %q", text)
+	}
+}
+
+func TestProcessToolSieveDetectsGeminiFunctionCallPayload(t *testing.T) {
+	var state toolStreamSieveState
+	events := processToolSieveChunk(&state, `{"functionCall":{"name":"search_web","args":{"query":"latest"}}}`, []string{"search_web"})
+	events = append(events, flushToolSieve(&state, []string{"search_web"})...)
+
+	var textContent string
+	var toolCalls int
+	for _, evt := range events {
+		if evt.Content != "" {
+			textContent += evt.Content
+		}
+		toolCalls += len(evt.ToolCalls)
+	}
+	if toolCalls != 1 {
+		t.Fatalf("expected one tool call from functionCall payload, got events=%#v", events)
+	}
+	if strings.Contains(strings.ToLower(textContent), "functioncall") {
+		t.Fatalf("functionCall json leaked into text content: %q", textContent)
 	}
 }
 

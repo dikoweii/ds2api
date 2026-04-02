@@ -1,5 +1,7 @@
 package util
 
+import "strings"
+
 // BuildToolCallInstructions generates the unified tool-calling instruction block
 // used by all adapters (OpenAI, Claude, Gemini). It uses attention-optimized
 // structure: rules → negative examples → positive examples → anchor.
@@ -19,7 +21,7 @@ func BuildToolCallInstructions(toolNames []string) string {
 			ex1 = n
 			used["ex1"] = true
 		// Write/execute-type tools
-		case !used["ex2"] && matchAny(n, "write_to_file", "apply_diff", "execute_command", "Write", "Edit", "MultiEdit", "Bash"):
+		case !used["ex2"] && matchAny(n, "write_to_file", "apply_diff", "execute_command", "exec_command", "Write", "Edit", "MultiEdit", "Bash"):
 			ex2 = n
 			used["ex2"] = true
 		// Interactive/meta tools
@@ -28,10 +30,13 @@ func BuildToolCallInstructions(toolNames []string) string {
 			used["ex3"] = true
 		}
 	}
+	ex1Params := exampleReadParams(ex1)
+	ex2Params := exampleWriteOrExecParams(ex2)
+	ex3Params := exampleInteractiveParams(ex3)
 
 	return `TOOL CALL FORMAT — FOLLOW EXACTLY:
 
-When calling tools, emit ONLY raw XML. No text before, no text after, no markdown fences.
+When calling tools, emit ONLY raw XML at the very end of your response. No text before, no text after, no markdown fences.
 
 <tool_calls>
   <tool_call>
@@ -47,6 +52,7 @@ RULES:
 4) Do NOT wrap the XML in markdown code fences (no triple backticks).
 5) After receiving a tool result, use it directly. Only call another tool if the result is insufficient.
 6) If you want to say something AND call a tool, output text first, then the XML block on its own.
+7) Parameters MUST use the exact field names from the selected tool schema.
 
 ❌ WRONG — Do NOT do these:
 Wrong 1 — mixed text and XML:
@@ -62,7 +68,7 @@ Example A — Single tool:
 <tool_calls>
   <tool_call>
     <tool_name>` + ex1 + `</tool_name>
-    <parameters>{"path":"src/main.go"}</parameters>
+    <parameters>` + ex1Params + `</parameters>
   </tool_call>
 </tool_calls>
 
@@ -70,11 +76,11 @@ Example B — Two tools in parallel:
 <tool_calls>
   <tool_call>
     <tool_name>` + ex1 + `</tool_name>
-    <parameters>{"path":"config.json"}</parameters>
+    <parameters>` + ex1Params + `</parameters>
   </tool_call>
   <tool_call>
     <tool_name>` + ex2 + `</tool_name>
-    <parameters>{"path":"output.txt","content":"Hello world"}</parameters>
+    <parameters>` + ex2Params + `</parameters>
   </tool_call>
 </tool_calls>
 
@@ -82,7 +88,7 @@ Example C — Tool with complex nested JSON parameters:
 <tool_calls>
   <tool_call>
     <tool_name>` + ex3 + `</tool_name>
-    <parameters>{"question":"Which approach do you prefer?","follow_up":[{"text":"Option A"},{"text":"Option B"}]}</parameters>
+    <parameters>` + ex3Params + `</parameters>
   </tool_call>
 </tool_calls>
 
@@ -96,4 +102,39 @@ func matchAny(name string, candidates ...string) bool {
 		}
 	}
 	return false
+}
+
+func exampleReadParams(name string) string {
+	switch strings.TrimSpace(name) {
+	case "Read":
+		return `{"file_path":"README.md"}`
+	case "Glob":
+		return `{"pattern":"**/*.go","path":"."}`
+	default:
+		return `{"path":"src/main.go"}`
+	}
+}
+
+func exampleWriteOrExecParams(name string) string {
+	switch strings.TrimSpace(name) {
+	case "Bash", "execute_command":
+		return `{"command":"pwd"}`
+	case "exec_command":
+		return `{"cmd":"pwd"}`
+	case "Edit":
+		return `{"file_path":"README.md","old_string":"foo","new_string":"bar"}`
+	case "MultiEdit":
+		return `{"file_path":"README.md","edits":[{"old_string":"foo","new_string":"bar"}]}`
+	default:
+		return `{"path":"output.txt","content":"Hello world"}`
+	}
+}
+
+func exampleInteractiveParams(name string) string {
+	switch strings.TrimSpace(name) {
+	case "Task":
+		return `{"description":"Investigate flaky tests","prompt":"Run targeted tests and summarize failures"}`
+	default:
+		return `{"question":"Which approach do you prefer?","follow_up":[{"text":"Option A"},{"text":"Option B"}]}`
+	}
 }

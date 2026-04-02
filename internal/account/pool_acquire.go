@@ -60,16 +60,10 @@ func (p *Pool) acquireLocked(target string, exclude map[string]bool) (config.Acc
 		return acc, true
 	}
 
-	if acc, ok := p.tryAcquire(exclude, true); ok {
-		return acc, true
-	}
-	if acc, ok := p.tryAcquire(exclude, false); ok {
-		return acc, true
-	}
-	return config.Account{}, false
+	return p.tryAcquire(exclude)
 }
 
-func (p *Pool) tryAcquire(exclude map[string]bool, requireToken bool) (config.Account, bool) {
+func (p *Pool) tryAcquire(exclude map[string]bool) (config.Account, bool) {
 	for i := 0; i < len(p.queue); i++ {
 		id := p.queue[i]
 		if exclude[id] || !p.canAcquireIDLocked(id) {
@@ -77,9 +71,6 @@ func (p *Pool) tryAcquire(exclude map[string]bool, requireToken bool) (config.Ac
 		}
 		acc, ok := p.store.FindAccount(id)
 		if !ok {
-			continue
-		}
-		if requireToken && acc.Token == "" {
 			continue
 		}
 		p.inUse[id]++

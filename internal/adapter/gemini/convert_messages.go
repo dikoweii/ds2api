@@ -1,11 +1,20 @@
 package gemini
 
-import "strings"
+import (
+	"fmt"
+	"strings"
+)
 
 const maxGeminiRawPromptChars = 1024
 
 func geminiMessagesFromRequest(req map[string]any) []any {
 	out := make([]any, 0, 8)
+	toolCallCounter := 0
+	nextToolCallID := func() string {
+		toolCallCounter++
+		return fmt.Sprintf("call_gemini_%d", toolCallCounter)
+	}
+	lastToolCallIDByName := map[string]string{}
 	if sys := normalizeGeminiSystemInstruction(req["systemInstruction"]); strings.TrimSpace(sys) != "" {
 		out = append(out, map[string]any{
 			"role":    "system",
@@ -61,8 +70,11 @@ func geminiMessagesFromRequest(req map[string]any) []any {
 				if name := strings.TrimSpace(asString(fnCall["name"])); name != "" {
 					callID := strings.TrimSpace(asString(fnCall["id"]))
 					if callID == "" {
-						callID = "call_gemini"
+						if callID = strings.TrimSpace(asString(fnCall["call_id"])); callID == "" {
+							callID = nextToolCallID()
+						}
 					}
+					lastToolCallIDByName[strings.ToLower(name)] = callID
 					out = append(out, map[string]any{
 						"role": "assistant",
 						"tool_calls": []any{
@@ -91,7 +103,10 @@ func geminiMessagesFromRequest(req map[string]any) []any {
 					callID = strings.TrimSpace(asString(fnResp["tool_call_id"]))
 				}
 				if callID == "" {
-					callID = "call_gemini"
+					callID = strings.TrimSpace(lastToolCallIDByName[strings.ToLower(name)])
+				}
+				if callID == "" {
+					callID = nextToolCallID()
 				}
 				content := fnResp["response"]
 				if content == nil {

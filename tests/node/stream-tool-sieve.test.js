@@ -108,6 +108,24 @@ test('parseToolCalls parses text-kv fallback payload', () => {
   assert.equal(calls[0].input.command, 'cd scripts && python check_syntax.py example.py');
 });
 
+test('parseToolCalls supports Gemini functionCall JSON payload', () => {
+  const payload = JSON.stringify({
+    functionCall: { name: 'search_web', args: { query: 'latest' } },
+  });
+  const calls = parseToolCalls(payload, ['search_web']);
+  assert.deepEqual(calls, [{ name: 'search_web', input: { query: 'latest' } }]);
+});
+
+test('parseToolCalls supports Claude tool_use JSON payload', () => {
+  const payload = JSON.stringify({
+    type: 'tool_use',
+    name: 'read_file',
+    input: { path: 'README.md' },
+  });
+  const calls = parseToolCalls(payload, ['read_file']);
+  assert.deepEqual(calls, [{ name: 'read_file', input: { path: 'README.md' } }]);
+});
+
 test('parseToolCalls parses multiple text-kv fallback payloads', () => {
   const text = [
     'function.name: read_file',

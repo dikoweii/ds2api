@@ -215,6 +215,33 @@ func TestPoolDropsLegacyTokenOnlyAccountOnLoad(t *testing.T) {
 	}
 }
 
+func TestPoolAcquireRotatesIntoTokenlessAccounts(t *testing.T) {
+	t.Setenv("DS2API_ACCOUNT_MAX_INFLIGHT", "1")
+	t.Setenv("DS2API_ACCOUNT_CONCURRENCY", "")
+	t.Setenv("DS2API_ACCOUNT_MAX_QUEUE", "")
+	t.Setenv("DS2API_ACCOUNT_QUEUE_SIZE", "")
+	t.Setenv("DS2API_CONFIG_JSON", `{
+		"keys":["k1"],
+		"accounts":[
+			{"email":"acc1@example.com","token":"token1"},
+			{"email":"acc2@example.com","token":""},
+			{"email":"acc3@example.com","token":""}
+		]
+	}`)
+
+	pool := NewPool(config.LoadStore())
+	for i, want := range []string{"acc1@example.com", "acc2@example.com", "acc3@example.com"} {
+		acc, ok := pool.Acquire("", nil)
+		if !ok {
+			t.Fatalf("expected acquire success at step %d", i+1)
+		}
+		if got := acc.Identifier(); got != want {
+			t.Fatalf("unexpected account at step %d: got %q want %q", i+1, got, want)
+		}
+		pool.Release(acc.Identifier())
+	}
+}
+
 func TestPoolAcquireWaitQueuesAndSucceedsAfterRelease(t *testing.T) {
 	pool := newSingleAccountPoolForTest(t, "1")
 	first, ok := pool.Acquire("", nil)

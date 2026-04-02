@@ -111,8 +111,9 @@ go build -o ds2api ./cmd/ds2api
 ### 2.1 基本步骤
 
 ```bash
-# 复制环境变量模板
+# 复制环境变量模板和配置文件
 cp .env.example .env
+cp config.example.json config.json
 
 # 编辑 .env（请改成你的强密码），至少设置：
 #   DS2API_ADMIN_KEY=your-admin-key

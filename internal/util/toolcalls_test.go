@@ -271,6 +271,34 @@ func TestParseToolCallsSupportsInvokeFunctionCallStyle(t *testing.T) {
 	}
 }
 
+func TestParseToolCallsSupportsGeminiFunctionCallJSON(t *testing.T) {
+	text := `{"functionCall":{"name":"search_web","args":{"query":"latest"}}}`
+	calls := ParseToolCalls(text, []string{"search_web"})
+	if len(calls) != 1 {
+		t.Fatalf("expected 1 call, got %#v", calls)
+	}
+	if calls[0].Name != "search_web" {
+		t.Fatalf("expected search_web, got %q", calls[0].Name)
+	}
+	if calls[0].Input["query"] != "latest" {
+		t.Fatalf("expected query argument, got %#v", calls[0].Input)
+	}
+}
+
+func TestParseToolCallsSupportsClaudeToolUseJSON(t *testing.T) {
+	text := `{"type":"tool_use","name":"read_file","input":{"path":"README.md"}}`
+	calls := ParseToolCalls(text, []string{"read_file"})
+	if len(calls) != 1 {
+		t.Fatalf("expected 1 call, got %#v", calls)
+	}
+	if calls[0].Name != "read_file" {
+		t.Fatalf("expected read_file, got %q", calls[0].Name)
+	}
+	if calls[0].Input["path"] != "README.md" {
+		t.Fatalf("expected path argument, got %#v", calls[0].Input)
+	}
+}
+
 func TestParseToolCallsSupportsToolUseFunctionParameterStyle(t *testing.T) {
 	text := `<tool_use><function name="search_web"><parameter name="query">test</parameter></function></tool_use>`
 	calls := ParseToolCalls(text, []string{"search_web"})

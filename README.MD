@@ -166,8 +166,9 @@ go run ./cmd/ds2api
 ### 方式二：Docker 运行
 
 ```bash
-# 1. 准备环境变量文件
+# 1. 准备环境变量和配置文件
 cp .env.example .env
+cp config.example.json config.json
 
 # 2. 编辑 .env（至少设置 DS2API_ADMIN_KEY）
 #    DS2API_ADMIN_KEY=请替换为强密码
