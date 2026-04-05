@@ -63,6 +63,16 @@ func TestParseDeepSeekContentLineContent(t *testing.T) {
 	}
 }
 
+func TestParseDeepSeekContentLineFiltersIncompleteStatusText(t *testing.T) {
+	res := ParseDeepSeekContentLine([]byte(`data: {"p":"response/status","v":"INCOMPLETE"}`), false, "text")
+	if !res.Parsed || res.Stop {
+		t.Fatalf("expected parsed non-stop result: %#v", res)
+	}
+	if len(res.Parts) != 0 {
+		t.Fatalf("expected INCOMPLETE status to be filtered, got %#v", res.Parts)
+	}
+}
+
 func TestParseDeepSeekContentLinePreservesSpaceOnlyChunk(t *testing.T) {
 	res := ParseDeepSeekContentLine([]byte(`data: {"v":" "}`), false, "text")
 	if !res.Parsed || res.Stop {

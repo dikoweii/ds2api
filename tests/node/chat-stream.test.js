@@ -291,6 +291,19 @@ test('parseChunkForContent preserves output tokens on FINISHED lines', () => {
   assert.deepEqual(parsed.parts, []);
 });
 
+test('parseChunkForContent filters INCOMPLETE status text without stopping stream', () => {
+  const parsed = parseChunkForContent(
+    { p: 'response/status', v: 'INCOMPLETE', accumulated_token_usage: 190 },
+    false,
+    'text',
+  );
+  assert.equal(parsed.parsed, true);
+  assert.equal(parsed.finished, false);
+  assert.equal(parsed.contentFilter, false);
+  assert.equal(parsed.outputTokens, 190);
+  assert.deepEqual(parsed.parts, []);
+});
+
 test('parseChunkForContent strips leaked CONTENT_FILTER suffix and preserves line breaks', () => {
   const leaked = parseChunkForContent(
     { p: 'response/content', v: '正常输出CONTENT_FILTER你好，这个问题我暂时无法回答' },

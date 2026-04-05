@@ -58,11 +58,22 @@ function parseChunkForContent(chunk, thinkingEnabled, currentType, stripReferenc
       newType: currentType,
     };
   }
-  if (pathValue === 'response/status' && asString(chunk.v) === 'FINISHED') {
+  if (isStatusPath(pathValue)) {
+    if (asString(chunk.v) === 'FINISHED') {
+      return {
+        parsed: true,
+        parts: [],
+        finished: true,
+        contentFilter: false,
+        errorMessage: '',
+        outputTokens,
+        newType: currentType,
+      };
+    }
     return {
       parsed: true,
       parts: [],
-      finished: true,
+      finished: false,
       contentFilter: false,
       errorMessage: '',
       outputTokens,
@@ -143,6 +154,17 @@ function parseChunkForContent(chunk, thinkingEnabled, currentType, stripReferenc
         parsed: true,
         parts: [],
         finished: true,
+        contentFilter: false,
+        errorMessage: '',
+        outputTokens,
+        newType,
+      };
+    }
+    if (isStatusPath(pathValue)) {
+      return {
+        parsed: true,
+        parts: [],
+        finished: false,
         contentFilter: false,
         errorMessage: '',
         outputTokens,
@@ -235,8 +257,11 @@ function extractContentRecursive(items, defaultType, stripReferenceMarkers = tru
     }
     const itemPath = asString(it.p);
     const itemV = it.v;
-    if (itemPath === 'status' && asString(itemV) === 'FINISHED') {
-      return { parts: [], finished: true };
+    if (isStatusPath(itemPath)) {
+      if (asString(itemV) === 'FINISHED') {
+        return { parts: [], finished: true };
+      }
+      continue;
     }
     if (shouldSkipPath(itemPath)) {
       continue;
@@ -262,6 +287,9 @@ function extractContentRecursive(items, defaultType, stripReferenceMarkers = tru
     }
 
     if (typeof itemV === 'string') {
+      if (isStatusPath(itemPath)) {
+        continue;
+      }
       if (itemV && itemV !== 'FINISHED') {
         const content = asContentString(itemV, stripReferenceMarkers);
         if (content) {
@@ -302,6 +330,10 @@ function extractContentRecursive(items, defaultType, stripReferenceMarkers = tru
     }
   }
   return { parts, finished: false };
+}
+
+function isStatusPath(pathValue) {
+  return pathValue === 'response/status' || pathValue === 'status';
 }
 
 function filterLeakedContentFilterParts(parts) {

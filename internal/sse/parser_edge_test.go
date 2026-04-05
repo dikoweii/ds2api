@@ -159,8 +159,8 @@ func TestParseSSEChunkForContentStatusNotFinished(t *testing.T) {
 	if finished {
 		t.Fatal("expected not finished for non-FINISHED status")
 	}
-	if len(parts) != 1 || parts[0].Text != "IN_PROGRESS" {
-		t.Fatalf("expected content for non-FINISHED status, got %#v", parts)
+	if len(parts) != 0 {
+		t.Fatalf("expected non-finished status to be filtered, got %#v", parts)
 	}
 }
 
